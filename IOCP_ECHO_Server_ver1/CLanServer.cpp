@@ -7,7 +7,7 @@
 
 
 
-CLanServer::CLanServer()
+void CLanServer::Start()
 {
 	// Initialize Winsock
 	WSADATA wsa;
@@ -213,28 +213,32 @@ unsigned int WINAPI CLanServer::NetworkWorkerThread(void* arg)
 		if (g_bShutdown) break;
 
 		// Check Exception
-		if (dwTransferred == 0 && pSession == nullptr && pNetOvl == nullptr)
+		if (pNetOvl == nullptr)
 		{
-			break;
-		}
-		if (GQCSRet == 0 || dwTransferred == 0)
-		{
-			if (GQCSRet == 0)
+			if (GQCSRet == FALSE)
 			{
+				// GetQueuedCompletionStatus Fail
+				PostQueuedCompletionStatus(hNetworkCP, 0, 0, 0);
 				int err = WSAGetLastError();
 				if (err != WSAECONNRESET)
 				{
+					PostQueuedCompletionStatus(hNetworkCP, 0, 0, 0);
 					::printf("%d : Error! %s(%d): %d\n", threadID, __func__, __LINE__, err);
 				}
+				break;
 			}
-			// 소켓 정상 종료
-			if (dwTransferred == 0)
+
+			if (dwTransferred == 0 && pSession == 0)
 			{
-				//Disconnect(pSession);
-				continue;
+				// 정상 종료 루틴
+				PostQueuedCompletionStatus(hNetworkCP, 0, 0, 0);
+				break;
 			}
 		}
-
+		else if (dwTransferred == 0)
+		{
+			//Disconnect(pSession);
+		}
 		// Recv
 		else if (pNetOvl->_type == NET_TYPE::RECV)
 		{

@@ -14,6 +14,7 @@ int main()
     // 서버 인스턴스 생성
 	g_Server = new CEchoServer;
 
+	g_Server->Start();
     // 서버 실행 중 (g_bShutdown이 true가 될 때까지 루프)
 	while (!g_bShutdown)
 	{

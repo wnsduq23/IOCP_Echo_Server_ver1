@@ -3,7 +3,7 @@
 class CLanServer
 {
 public:
-	CLanServer();
+	void Start();
 	~CLanServer();
 
 	// Thread entry point functions (to be used with _beginthreadex)
