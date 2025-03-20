@@ -145,23 +145,16 @@ CLanServer::~CLanServer()
 	::printf("\nAll Thread Terminate!\n");
 }
 
-CLanServer* CLanServer::GetInstance()
-{
-	static CLanServer _CLanServer;
-	return &_CLanServer;
-}
-
 unsigned int WINAPI CLanServer::AcceptThread(void* arg)
 {
 	SOCKADDR_IN clientaddr;
 	int addrlen = sizeof(clientaddr);
-	CLanServer* pCLanServer = CLanServer::GetInstance();
 
 	while (1)
 	{
 		// Accept
 		SOCKET client_sock = accept(
-			pCLanServer->_listenSock, (SOCKADDR*)&clientaddr, &addrlen);
+			g_Server->_listenSock, (SOCKADDR*)&clientaddr, &addrlen);
 
 		if (g_bShutdown) break;
 
@@ -173,7 +166,7 @@ unsigned int WINAPI CLanServer::AcceptThread(void* arg)
 
 		// Create Session
 		Session* pSession = new Session(
-			pCLanServer->_sessionIDSupplier++, client_sock, clientaddr);
+			g_Server->_sessionIDSupplier++, client_sock, clientaddr);
 		if (pSession == nullptr)
 		{
 			::printf("Error! %s(%d)\n", __func__, __LINE__);
@@ -189,10 +182,10 @@ unsigned int WINAPI CLanServer::AcceptThread(void* arg)
 
 		// Connect Session to IOCP and Post Recv
 		CreateIoCompletionPort((HANDLE)pSession->_sock,
-			pCLanServer->_hNetworkCP, (ULONG_PTR)pSession, 0);
+			g_Server->_hNetworkCP, (ULONG_PTR)pSession, 0);
 
 		// recv를 미리 등록해둔다.
-		pCLanServer->RecvPost(pSession->_ID, GetCurrentThreadId());
+		g_Server->RecvPost(pSession->_ID, GetCurrentThreadId());
 	}
 
 	::printf("Accept Thread Terminate (ID: %d)\n", GetCurrentThreadId());
@@ -203,9 +196,8 @@ unsigned int WINAPI CLanServer::AcceptThread(void* arg)
 unsigned int WINAPI CLanServer::NetworkWorkerThread(void* arg)
 {
 	HANDLE hNetworkCP = (HANDLE)arg;
-	CLanServer* pCLanServer = CLanServer::GetInstance();
 	unordered_map<unsigned int, int>::iterator iter
-		= pCLanServer->ThreadIDMap.find(GetCurrentThreadId());
+		= g_Server->ThreadIDMap.find(GetCurrentThreadId());
 	int threadID = iter->second;
 
 	while (1)
@@ -246,14 +238,14 @@ unsigned int WINAPI CLanServer::NetworkWorkerThread(void* arg)
 		// Recv
 		else if (pNetOvl->_type == NET_TYPE::RECV)
 		{
-			pCLanServer->HandleRecvCP(pSession->_ID, dwTransferred, threadID);
+			g_Server->HandleRecvCP(pSession->_ID, dwTransferred, threadID);
 			::printf("%d: Complete Recv %d bytes\n", threadID, dwTransferred);
 		}
 
 		// Send 
 		else if (pNetOvl->_type == NET_TYPE::SEND)
 		{
-			pCLanServer->HandleSendCP(pSession->_ID, dwTransferred, threadID);
+			g_Server->HandleSendCP(pSession->_ID, dwTransferred, threadID);
 			::printf("%d: Complete Send %d bytes\n", threadID, dwTransferred);
 		}
 		else
@@ -264,7 +256,7 @@ unsigned int WINAPI CLanServer::NetworkWorkerThread(void* arg)
 		if (InterlockedDecrement(&pSession->_IOCount) == 0)
 		{
 			PostQueuedCompletionStatus(
-				pCLanServer->_hReleaseCP, 0, (ULONG_PTR)pSession, 0);
+				g_Server->_hReleaseCP, 0, (ULONG_PTR)pSession, 0);
 		}
 	}
 
@@ -276,7 +268,6 @@ unsigned int WINAPI CLanServer::NetworkWorkerThread(void* arg)
 unsigned int WINAPI CLanServer::ReleaseThread(void* arg)
 {
 	HANDLE hReleaseCP = (HANDLE)arg;
-	CLanServer* pCLanServer = CLanServer::GetInstance();
 
 	while (1)
 	{
@@ -404,14 +395,15 @@ void CLanServer::RecvDataToMsg(__int64 sessionID, int threadID)
 		packet.MoveWritePos(dequeueRet);
 		useSize = pSession->_recvBuf.GetUseSize();
 		LeaveCriticalSection(&pSession->_cs);
-		CEchoServer::GetInstance()->OnMessage(pSession->_ID, &packet, threadID);
+		OnMessage(pSession->_ID, &packet, threadID);
 		EnterCriticalSection(&pSession->_cs);
 	}
 
 	LeaveCriticalSection(&pSession->_cs);
 }
 
-void CLanServer::MsgToSendData(__int64 sessionID, SerializePacket* packet, int threadID)
+//MsgToSendData
+void CLanServer::SendPacket(__int64 sessionID, SerializePacket* packet, int threadID)
 {
 	AcquireSRWLockShared(&g_SessionMapLock);
 

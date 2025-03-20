@@ -6,13 +6,15 @@ public:
 	CLanServer();
 	~CLanServer();
 
-	// Singleton instance accessor
-	static CLanServer* GetInstance();
-
 	// Thread entry point functions (to be used with _beginthreadex)
-	static unsigned int WINAPI AcceptThread(void* arg);// static 빼면 어떻게돼?
+	static unsigned int WINAPI AcceptThread(void* arg);
 	static unsigned int WINAPI NetworkWorkerThread(void* arg);
 	static unsigned int WINAPI ReleaseThread(void* arg);
+
+	virtual bool OnConnectionRequest(const WCHAR* ip, USHORT port) = 0;
+	virtual void OnAccept(const UINT64 sessionID) = 0; // Accept 후 접속 처리 완료 후 호출
+	virtual void OnClientLeave(const UINT64 sessionID) = 0; // Release 후 호출
+	virtual void OnMessage(const UINT64 sessionID, SerializePacket* message, int threadID) = 0;
 
 	// I/O Completion handler functions
 	void HandleRecvCP(__int64 sessionID, int recvBytes, int threadID);
@@ -24,7 +26,7 @@ public:
 
 	// Message processing functions
 	void RecvDataToMsg(__int64 sessionID, int threadID);
-	void MsgToSendData(__int64 sessionID, SerializePacket* packet, int threadID);
+	void SendPacket(__int64 sessionID, SerializePacket* packet, int threadID);
 
 	// Mapping from thread ID to an index or identifier
 	std::unordered_map<unsigned int, int> ThreadIDMap;

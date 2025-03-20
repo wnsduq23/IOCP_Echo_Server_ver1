@@ -4,11 +4,6 @@
 #include "CLanServer.h"
 //#include "SerializePacket.h"
 
-CEchoServer* CEchoServer::GetInstance()
-{
-	static CEchoServer _CEchoServer;
-	return &_CEchoServer;
-}
 bool CEchoServer::OnConnectionRequest(const WCHAR* ip, USHORT port)
 {
 	return true;
@@ -37,6 +32,6 @@ void CEchoServer::OnMessage(const UINT64 sessionID, SerializePacket* message, in
 
 	SerializePacket packet;
 	//packet << (USHORT)sizeof(__int64) << num;
-	packet << (SHORT)sizeof(__int64) << num;
-	CLanServer::GetInstance()->MsgToSendData(sessionID, &packet, threadID);
+	packet << (SHORT)sizeof(num) << num;
+	SendPacket(sessionID, &packet, threadID);
 }
